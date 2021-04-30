@@ -260,34 +260,23 @@ DataProcessorSpec getZStoDigitsSpec(std::vector<int> const& tpcSectors)
         o2::framework::RawParser parser(raw.data(), raw.size());
 
         const unsigned char* ptr = nullptr;
-        int count = 0;
         int cruID = 0;
-        rdh_utils::FEEIDType lastFEE = -1;
+        rdh_utils::FEEIDType FEEID = -1;
         size_t totalSize = 0;
         for (auto it = parser.begin(); it != parser.end(); it++) {
           const unsigned char* current = it.raw();
           const o2::header::RAWDataHeader* rdh = (const o2::header::RAWDataHeader*)current;
-          if (current == nullptr || it.size() == 0 || (current - ptr) % TPCZSHDR::TPC_ZS_PAGE_SIZE || o2::raw::RDHUtils::getFEEID(*rdh) != lastFEE) {
-            if (count) {
+          if (it.size() == 0) {
+            ptr = nullptr;
+            continue;
+          } else {
+        	  ptr = current;
+              FEEID = o2::raw::RDHUtils::getFEEID(*rdh);
+              cruID = int(o2::raw::RDHUtils::getCRUID(*rdh));
               unsigned int sector = cruID / 10;
-              gsl::span<const ZeroSuppressedContainer8kb> z0in(reinterpret_cast<const ZeroSuppressedContainer8kb*>(ptr), count);
+              gsl::span<const ZeroSuppressedContainer8kb> z0in(reinterpret_cast<const ZeroSuppressedContainer8kb*>(ptr), 1 );
               decoder->DecodeZSPages(&z0in, &outDigits[sector], firstOrbit);
-            }
-            count = 0;
-            lastFEE = o2::raw::RDHUtils::getFEEID(*rdh);
-            cruID = int(o2::raw::RDHUtils::getCRUID(*rdh));
-            if (it.size() == 0) {
-              ptr = nullptr;
-              continue;
-            }
-            ptr = current;
           }
-          count++;
-        }
-        if (count) {
-          unsigned int sector = cruID / 10;
-          gsl::span<const ZeroSuppressedContainer8kb> z0in(reinterpret_cast<const ZeroSuppressedContainer8kb*>(ptr), count);
-          decoder->DecodeZSPages(&z0in, &outDigits[sector], firstOrbit);
         }
       }
       for (int i = 0; i < NSectors; i++) {
